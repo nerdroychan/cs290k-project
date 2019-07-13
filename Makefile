@@ -9,4 +9,4 @@ proto : ${PROTO_DIR}/dfs.proto
 	protoc --cpp_out=. ${PROTO_DIR}/dfs.proto
 
 clean :
-	rm *.o &> /dev/null
+	rm *.o a.out &> /dev/null

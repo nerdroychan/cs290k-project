@@ -46,44 +46,49 @@ struct OpenedFile {
     int fd;
     enum RWType type;
     char* path;
-}
+};
 
 struct OpenedDir {
     DIR* dirp;
     char* path;
-}
+};
 
-class DFSImpl final : public DFS::Service {
+class DFSImpl final : public dfs::DFS::Service {
 public:
     explicit DFSImpl() {
-        realpath(getcwd(), this->original_cwd);
+        char cwd[4096];
+        getcwd(cwd, 4096);
+        realpath(cwd, this->_original_cwd);
     }
 
     Status get_dir(ServerContext* context, const Void* req, Str* res) {
-        char* cwd = getcwd();
+        char cwd[4096];
+        getcwd(cwd, 4096);
         std::string cwd_string(cwd);
-        res->content = cwd_string;
+        res->set_content(cwd_string);
+        free(cwd);
 
         return Status::OK;
     }
 
     Status change_dir(ServerContext* context, const Str* req, Bool* res) {
-        std::string path = req->content;
+        std::string path = req->content();
         if (!this->_has_permission(path.c_str())) {
-            res->value = false;
+            res->set_value(false);
         } else {
-            res->value = (chdir(path.c_str()) == 0) ? true : false;
+            res->set_value((chdir(path.c_str()) == 0) ? true : false);
         }
 
-        return Status::Ok;
+        return Status::OK;
     }
 
     Status file_count(ServerContext* context, const Void* req, Int* res) {
-        char* cwd = getcwd();
+        char cwd[4096];
+        getcwd(cwd, 4096);
         int count = 0;
         bool ret = this->_open_dir(cwd);
-        if (!bool) {
-            res->value = -1;
+        if (!ret) {
+            res->set_value(-1);
         } else {
             struct dirent* entry;
             while ((entry = readdir(this->_opened_dir->dirp)) != NULL) {
@@ -92,80 +97,97 @@ public:
         }
         ret = this->_close_dir();
         if (!ret) {
-            res->value = -1;
+            res->set_value(-1);
         } else {
-            res->value = count;
+            res->set_value(count);
         }
 
         return Status::OK;
     }
 
     Status open_list(ServerContext* context, const Str* req, Bool* res) {
-        bool ret = this->_open_dir(req->content.c_str());
-        res->value = ret ? true : false;
+        bool ret = this->_open_dir(req->content().c_str());
+        res->set_value(ret ? true : false);
 
         return Status::OK;
     }
 
     Status next_list(ServerContext* context, const Void*, Dentry* res) {
         if (!this->_has_opened_dir()) {
-            res->size = -1;
+            res->set_size(-1);
         } else {
             struct dirent* entry = readdir(this->_opened_dir->dirp);
             if (entry == NULL) {
-                res->size = -1;
+                res->set_size(-1);
             } else {
-                res->name = entry->d_name;
+                res->set_name(entry->d_name);
                 string path(this->_opened_dir->path);
                 path.append(entry->d_name);
                 struct stat fileinfo;
                 int ret = stat(path.c_str(), &fileinfo);
                 if (ret != 0) {
-                    res->size = -1;
+                    res->set_size(-1);
                 } else {
-                    res->is_directory = (S_ISDIR(fileinfo.st_mode) \\
-                                        != 0) ? true : false;
-                    res->size = fileinfo.st_size;
-                    res->last_modified_time = (int)fileinfo.st_mtim.tv_sec;
+                    res->set_is_directory((S_ISDIR(fileinfo.st_mode)
+                                        != 0) ? true : false);
+                    res->set_size(fileinfo.st_size);
+                    res->set_last_modified_time((int)fileinfo.st_mtime);
                 }
             }
         }
 
-        return Status::OK
+        return Status::OK;
     }
 
     Status close_list(ServerContext* context, const Void* req, Bool* res) {
         bool ret = this->_close_dir();
-        res->value = ret ? true : false;
+        res->set_value(ret ? true : false);
 
         return Status::OK;
     }
 
     Status open_file_to_write(ServerContext* context, const Str* req,
             Bool* res) {
-        bool ret = this->_open_file(req->content.c_str(), T_WRITE);
-        res->value = (ret) ? true : false;
+        bool ret = this->_open_file(req->content().c_str(), T_WRITE);
+        res->set_value(ret ? true : false);
 
         return Status::OK;
     }
 
     Status next_write(ServerContext* context, const WriteRequest* req, 
             Bool* res) {
-
+        return Status::OK;
     }
 
+    Status open_file_to_read(ServerContext* context, const Str* req, 
+            Bool* res) {
+        return Status::OK;
+    }
+
+    Status next_read(ServerContext* context, const Void*, ReadResponse* res) {
+        return Status::OK;
+    }
+
+    Status random_read(ServerContext* context, const RandomReadRequest* req, 
+            ReadResponse* res) {
+        return Status::OK;
+    }
+
+    Status close_file(ServerContext* context, const Void* req, Bool* res) {
+        return Status::OK;
+    }
 
 private:
     char _original_cwd[4096];
     struct OpenedFile* _opened_file;
     struct OpenedDir*  _opened_dir;
 
-    bool _has_permission(char* path) {
+    bool _has_permission(const char* path) {
         char* _path = realpath(path, NULL);
         if (_path == NULL) {
             return false;
         }
-        if (strncmp(_path, this->original_cwd, strlen(this->original_cwd))\\
+        if (strncmp(_path, this->_original_cwd, strlen(this->_original_cwd)) 
                 == 0) {
             return true;
         }
@@ -175,20 +197,20 @@ private:
     }
 
     bool _has_opened_file() {
-        return (this->opened_file != NULL);
+        return (this->_opened_file != NULL);
     }
 
-    bool _open_file(char* path, enum RWType type) {
+    bool _open_file(const char* path, enum RWType type) {
         if (!this->_has_permission(path) || this->_has_opened_file()) {
             return false;
         }
-        char* path = realpath(path, NULL);
+        char* _path = realpath(path, NULL);
         int flags = O_CREAT;
-        flags |= (type == T_READ) ? O_READ : O_WRONLY;
+        flags |= (type == T_READ) ? O_RDONLY : O_WRONLY;
 
-        int fd = open(path, flags);
+        int fd = open(_path, flags);
         if (fd == -1) {
-            free(path);
+            free(_path);
             return false;
         }
 
@@ -197,7 +219,7 @@ private:
                 );
         this->_opened_file->fd = fd;
         this->_opened_file->type = type;
-        this->_opened_file->path = path;
+        this->_opened_file->path = _path;
         
         return true;
     }
@@ -207,36 +229,36 @@ private:
             return false;
         }
         close(this->_opened_file->fd);
-        free(this->_opened_file->name);
+        free(this->_opened_file->path);
         free(this->_opened_file);
         this->_opened_file = NULL;
         return true;
     }
 
     bool _has_opened_dir() {
-        return (this->opened_dir != NULL);
+        return (this->_opened_dir != NULL);
     }
 
-    bool _open_dir(char* path) {
+    bool _open_dir(const char* path) {
         if (!this->_has_permission(path) || this->_has_opened_file()) {
             return false;
         }
-        char* path = realpath(path, NULL);
+        char* _path = realpath(path, NULL);
         DIR* dirp;
-        dirp = opendir(cwd);
+        dirp = opendir(_path);
         if (dirp == NULL) {
-            return false
+            return false;
         }
 
         this->_opened_dir = (struct OpenedDir*)malloc(sizeof(struct OpenedDir));
         this->_opened_dir->dirp = dirp;        
-        this->_opened_dir->path = path;
+        this->_opened_dir->path = _path;
 
         return true;
     }
 
     bool _close_dir() {
-        if (!this->_has_opened_dir) {
+        if (!this->_has_opened_dir()) {
             return false;
         }
         closedir(this->_opened_dir->dirp);
@@ -246,13 +268,12 @@ private:
 
         return true;
     }
-
-}
+};
 
 
 void run_server() {
   std::string server_address("0.0.0.0:50051");
-  DFSImpl service();
+  DFSImpl service;
 
   ServerBuilder builder;
   builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
