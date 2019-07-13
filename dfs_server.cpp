@@ -14,6 +14,9 @@
 #include "protos/dfs.grpc.pb.h"
 
 
+class DFSImpl final : public DFS::Service {
+
+}
 
 
 
