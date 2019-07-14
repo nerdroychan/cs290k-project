@@ -54,17 +54,16 @@ message Dentry {
 
 message Block {
     bytes content = 1;
-    int32 size = 2;
 }
 
 message WriteRequest {
     Block block = 1;
-    int32 num = 2;
+    int32 size = 2;
 }
 
 message ReadResponse {
     Block block = 1;
-    int32 num = 2;
+    int32 size = 2;
 }
 
 message RandomReadRequest {

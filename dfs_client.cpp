@@ -1,6 +1,5 @@
 #include <iostream>
 
-
 #include <grpc/grpc.h>
 #include <grpcpp/channel.h>
 #include <grpcpp/client_context.h>
@@ -8,15 +7,12 @@
 #include <grpcpp/security/credentials.h>
 #include "protos/dfs.grpc.pb.h"
 
-
-
 using grpc::Channel;
 using grpc::ClientContext;
 using grpc::ClientReader;
 using grpc::ClientReaderWriter;
 using grpc::ClientWriter;
 using grpc::Status;
-
 
 using dfs::Void;
 using dfs::Str;

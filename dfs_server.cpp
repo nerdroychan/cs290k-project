@@ -37,6 +37,20 @@ using dfs::RandomReadRequest;
 
 using std::string;
 
+#define CTIME _get_time()
+
+string _get_time() {
+    time_t rawtime;
+    struct tm timeinfo;
+    char buf[80];
+    time(&rawtime);
+    timeinfo = *localtime(&rawtime);
+    strftime(buf, 80, "[%Y/%m/%d %H:%M:%S]",&timeinfo);
+    string ret(buf);
+
+    return ret;
+}
+
 enum RWType {
     T_READ,
     T_WRITE
@@ -59,6 +73,12 @@ public:
         char cwd[4096];
         getcwd(cwd, 4096);
         realpath(cwd, this->_original_cwd);
+        std::cout << CTIME << " Server instance init " << std::endl;
+    }
+
+    ~DFSImpl() {
+        this->_close_dir();
+        this->_close_file();
     }
 
     Status get_dir(ServerContext* context, const Void* req, Str* res) {
@@ -67,7 +87,7 @@ public:
         std::string cwd_string(cwd);
         res->set_content(cwd_string);
 
-        std::cout << "Req: get_dir, " << "Res: " << cwd << std::endl;
+        std::cout << CTIME << " Req: get_dir, " << "Res: " << cwd << std::endl;
 
         return Status::OK;
     }
@@ -79,6 +99,9 @@ public:
         } else {
             res->set_value((chdir(path.c_str()) == 0) ? true : false);
         }
+
+        std::cout <<CTIME << " Req: change_dir to " << path << ", Res: " << \
+            res->value() << std::endl;
 
         return Status::OK;
     }
@@ -103,12 +126,18 @@ public:
             res->set_value(count);
         }
 
+        std::cout << CTIME << " Req: file_count, Res: " << res->value() \
+            << std::endl;
+
         return Status::OK;
     }
 
     Status open_list(ServerContext* context, const Str* req, Bool* res) {
         bool ret = this->_open_dir(req->content().c_str());
         res->set_value(ret ? true : false);
+
+        std::cout << CTIME << " Req: open_list on " << req->content() \
+            << ", Res: " << res->value() << std::endl;
 
         return Status::OK;
     }
@@ -137,12 +166,19 @@ public:
             }
         }
 
+        std::cout << CTIME << " Req: next_list, Res: " << res->name() << ", " \
+            << res->is_directory() << ", " << res->size() << ", " \
+            << res->last_modified_time() << std::endl;
+
         return Status::OK;
     }
 
     Status close_list(ServerContext* context, const Void* req, Bool* res) {
         bool ret = this->_close_dir();
         res->set_value(ret ? true : false);
+
+        std::cout << CTIME << " Req: close_list, Res: " << res->value() \
+            << std::endl;
 
         return Status::OK;
     }
@@ -152,11 +188,30 @@ public:
         bool ret = this->_open_file(req->content().c_str(), T_WRITE);
         res->set_value(ret ? true : false);
 
+        std::cout << CTIME << " Req: open_file_to_write on " << req->content() \
+            << ", Res: " << res->value() << std::endl;
+
         return Status::OK;
     }
 
     Status next_write(ServerContext* context, const WriteRequest* req, 
             Bool* res) {
+        if (!this->_has_opened_file()) {
+            res->set_value(false);
+        } else {
+            string content = req->block().content();
+            size_t size = req->size();
+            ssize_t ret = write(this->_opened_file->fd, content.c_str(), size);
+            if (ret == -1) {
+                res->set_value(false);
+            } else {
+                res->set_value(true);
+            }
+        }
+
+        std::cout << CTIME << " Req: next_write (content hidden), Res: " \
+            << res->value() << std::endl;
+
         return Status::OK;
     }
 
@@ -165,15 +220,58 @@ public:
         bool ret = this->_open_file(req->content().c_str(), T_READ);
         res->set_value(ret ? true : false);
 
+        std::cout << CTIME << " Req: open_file_to_read on " << req->content() \
+            << ", Res: " << res->value() << std::endl;
+
         return Status::OK;
     }
 
     Status next_read(ServerContext* context, const Void*, ReadResponse* res) {
+        if (!this->_has_opened_file()) {
+            res->set_size(-1);
+        } else {
+            char buf[512];
+            ssize_t ret = read(this->_opened_file->fd, (void*)buf, 512);
+            if (ret == -1) {
+                res->set_size(-1);
+            } else {
+                res->set_size(ret);
+                res->mutable_block()->set_content(buf);
+            }
+        }
+
+        std::cout << CTIME << " Req: next_read, Res: (content hidden), " \
+            << res->size() << std::endl;
+
         return Status::OK;
     }
 
     Status random_read(ServerContext* context, const RandomReadRequest* req, 
             ReadResponse* res) {
+        if (!this->_has_opened_file()) {
+            res->set_size(-1);
+        } else {
+            char buf[512];
+            int offset = req->offset();
+            int size = req->size();
+            off_t _offset = lseek(this->_opened_file->fd, offset, SEEK_SET);
+            if (_offset == (off_t)-1 || size > 512) {
+                res->set_size(-1);
+            } else {
+                ssize_t ret = read(this->_opened_file->fd, (void*)buf, size);
+                if (ret == -1) {
+                    res->set_size(-1);
+                } else {
+                    res->set_size(ret);
+                    res->mutable_block()->set_content(buf);
+                }
+            }
+        }
+
+        std::cout << CTIME << " Req: random_read at offset " << req->offset() \
+            << "with size " << req->size() << ", Res: (content hidden), " \
+            << res->size() << std::endl;
+
         return Status::OK;
     }
 
@@ -286,7 +384,7 @@ void run_server() {
   builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
   builder.RegisterService(&service);
   std::unique_ptr<Server> server(builder.BuildAndStart());
-  std::cout << "Server listening on " << server_address << std::endl;
+  std::cout << CTIME << " Server listening on " << server_address << std::endl;
   server->Wait();
 }
 
