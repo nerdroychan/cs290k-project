@@ -66,7 +66,8 @@ public:
         getcwd(cwd, 4096);
         std::string cwd_string(cwd);
         res->set_content(cwd_string);
-        free(cwd);
+
+        std::cout << "Req: get_dir, " << "Res: " << cwd << std::endl;
 
         return Status::OK;
     }
@@ -161,6 +162,9 @@ public:
 
     Status open_file_to_read(ServerContext* context, const Str* req, 
             Bool* res) {
+        bool ret = this->_open_file(req->content().c_str(), T_READ);
+        res->set_value(ret ? true : false);
+
         return Status::OK;
     }
 
@@ -174,6 +178,9 @@ public:
     }
 
     Status close_file(ServerContext* context, const Void* req, Bool* res) {
+        bool ret = this->_close_file();
+        res->set_value(ret ? true : false);
+
         return Status::OK;
     }
 
