@@ -296,7 +296,14 @@ private:
         //std::cout << "pcheck on " << path << std::endl;
         fflush(stdout);
         char buf[PATH_MAX];
-        strncpy(buf, path, strlen(path)); 
+        if (strlen(path) == 0) return NULL;
+        else if (path[0] == '/') {
+            strncpy(buf, path, strlen(path)); 
+        } else {
+            strncpy(buf+2, path, strlen(path));
+            buf[0] = '.';
+            buf[1] = '/';
+        }
         char* _path = realpath(path, NULL);
         std::stack<string> comp;
         while (_path == NULL) {
