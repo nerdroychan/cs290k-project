@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <string.h>
 
 #include <iostream>
 #include <vector>
@@ -147,6 +148,10 @@ public:
             return;
         }
         ls(list, res.content());
+    }
+
+    void ls(const string path) {
+        this->ls(false, path);
     }
 
     void ls() {
@@ -367,17 +372,100 @@ public:
         buf[random_read_res.size()+1] = '\0';
         std::cout << buf << std::endl;
         
-        std::cout << "get succeed" << std::endl;
+        std::cout << "randomread succeed" << std::endl;
     }
 
     void shell() {
-        this->get("./test/remote", "./test/local");
-        this->randomread("./test/remote", 1, 1);
+        string command;
+        while (true) {
+            std::cout << "$ ";
+            fflush(stdout);
+            if (getline(std::cin, command)) {
+                this->_dispatch(command);
+                fflush(stdout);
+            } else break;
+        }
+        std::cout << std::endl;
+        fflush(stdout);
     }
 
 private:
     std::unique_ptr<dfs::DFS::Stub> _stub;
+
+    void _dispatch(string& command) {
+        std::vector<string> cmdbuf;
+        char* cmd;
+        char buf[4096];
+        strcpy(buf, command.c_str());
+        cmd = strtok(buf, " ");
+        while (cmd != NULL) {
+            string s(cmd);
+            cmdbuf.push_back(s);
+            cmd = strtok(NULL, " ");
+        }
+
+        if (cmdbuf.size() == 0) return;
+
+        if (cmdbuf[0].compare("getdir") == 0) {
+            this->getdir();
+        } else if (cmdbuf[0].compare("filecount") == 0) {
+            this->filecount();
+        } else if (cmdbuf[0].compare("cd") == 0) {
+            if (cmdbuf.size() == 1) {
+                std::cout << "Usage: cd dir" << std::endl;
+            }
+            this->cd(cmdbuf[1]);
+        } else if (cmdbuf[0].compare("ls") == 0) {
+            if (cmdbuf.size() == 1) {
+                this->ls();
+            } else if (cmdbuf.size() == 2) {
+                if (cmdbuf[1].compare("-l") == 0) {
+                    this->ls(true);
+                } else {
+                    this->ls(cmdbuf[1]);
+                }
+            } else if (cmdbuf.size() == 3){
+                if (cmdbuf[1].compare("-l") == 0) {
+                    this->ls(true, cmdbuf[2]);
+                } else if (cmdbuf[2].compare("-l") == 0) {
+                    this->ls(true, cmdbuf[1]);
+                } else {
+                    std::cout << "Usage: ls [-l] [directory_name]" << std::endl;
+                }
+            } else {
+                std::cout << "Usage: ls [-l] [dir]" << std::endl;
+            }
+        } else if (cmdbuf[0].compare("put") == 0) {
+            if (cmdbuf.size() == 2) {
+                this->put(cmdbuf[1]);
+            } else if (cmdbuf.size() == 3) {
+                this->put(cmdbuf[1], cmdbuf[2]);
+            } else {
+                std::cout << "Usage: put localfile [remotefile]" << std::endl;
+            }
+        } else if (cmdbuf[0].compare("get") == 0) {
+            if (cmdbuf.size() == 2) {
+                this->get(cmdbuf[1]);
+            } else if (cmdbuf.size() == 3) {
+                this->get(cmdbuf[1], cmdbuf[2]);
+            } else {
+                std::cout << "Usage: get remotefile [localfile]" << std::endl;
+            }
+        } else if (cmdbuf[0].compare("randomread") == 0) {
+            if (cmdbuf.size() == 4) {
+                this->randomread(cmdbuf[1], std::stoi(cmdbuf[2]), \
+                        std::stoi(cmdbuf[3]));
+            } else {
+                std::cout << "Usage: randomread remotefile firstbyte numbytes" \
+                    << std::endl;
+            }
+        } else {
+            std::cout << "dfs: command not found: " << cmdbuf[0] << std::endl;
+        }
+    }
 };
+
+
 
 
 int main(int argc, char** argv) {
