@@ -148,10 +148,11 @@ public:
         } else {
             struct dirent* entry = readdir(this->_opened_dir->dirp);
             if (entry == NULL) {
-                res->set_size(-1);
+                res->set_size(0);
             } else {
                 res->set_name(entry->d_name);
                 string path(this->_opened_dir->path);
+                path.append("/");
                 path.append(entry->d_name);
                 struct stat fileinfo;
                 int ret = stat(path.c_str(), &fileinfo);
