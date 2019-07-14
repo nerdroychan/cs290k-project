@@ -8,6 +8,7 @@
 
 #include <string>
 #include <iostream>
+#include <stack>
 
 #include <grpc/grpc.h>
 #include <grpcpp/server.h>
@@ -70,8 +71,8 @@ struct OpenedDir {
 class DFSImpl final : public dfs::DFS::Service {
 public:
     explicit DFSImpl() {
-        char cwd[4096];
-        getcwd(cwd, 4096);
+        char cwd[PATH_MAX];
+        getcwd(cwd, PATH_MAX);
         realpath(cwd, this->_original_cwd);
         std::cout << CTIME << " Server instance init " << std::endl;
     }
@@ -82,8 +83,8 @@ public:
     }
 
     Status get_dir(ServerContext* context, const Void* req, Str* res) {
-        char cwd[4096];
-        getcwd(cwd, 4096);
+        char cwd[PATH_MAX];
+        getcwd(cwd, PATH_MAX);
         std::string cwd_string(cwd);
         res->set_content(cwd_string);
 
@@ -107,8 +108,8 @@ public:
     }
 
     Status file_count(ServerContext* context, const Void* req, Int* res) {
-        char cwd[4096];
-        getcwd(cwd, 4096);
+        char cwd[PATH_MAX];
+        getcwd(cwd, PATH_MAX);
         int count = 0;
         bool ret = this->_open_dir(cwd);
         if (!ret) {
@@ -280,16 +281,51 @@ public:
         bool ret = this->_close_file();
         res->set_value(ret ? true : false);
 
+        std::cout << CTIME << " Req: close_file, Res: " << res->value() \
+            << std::endl;
+
         return Status::OK;
     }
 
 private:
-    char _original_cwd[4096];
+    char _original_cwd[PATH_MAX];
     struct OpenedFile* _opened_file;
     struct OpenedDir*  _opened_dir;
 
-    bool _has_permission(const char* path) {
+    char* _realpath(const char* path) {
+        //std::cout << "pcheck on " << path << std::endl;
+        fflush(stdout);
+        char buf[PATH_MAX];
+        strncpy(buf, path, strlen(path)); 
         char* _path = realpath(path, NULL);
+        std::stack<string> comp;
+        while (_path == NULL) {
+            char* last_slash = strrchr(buf, '/');
+            if (last_slash == NULL) break;
+            if (strlen(last_slash) == 1) continue;
+            string s(last_slash+1);
+            comp.push(s);
+            *last_slash = '\0';
+            _path = realpath(buf, NULL);
+        }
+        //std::cout << "middle result " << _path << std::endl;
+        if (_path != NULL) {
+            string __path(_path);
+            while (!comp.empty()) {
+                __path.append("/" + comp.top());
+                comp.pop();
+            }
+            free(_path);
+            _path = (char*)malloc(sizeof(char)*(strlen(__path.c_str())+1));
+            strncpy(_path, __path.c_str(), strlen(__path.c_str())+1);
+            _path[strlen(__path.c_str())] = '\0';
+        }
+        //std::cout << "final result " << _path << std::endl;
+        return _path;
+    }
+
+    bool _has_permission(const char* path) {
+        char* _path = this->_realpath(path);
         if (_path == NULL) {
             return false;
         }
@@ -310,11 +346,14 @@ private:
         if (!this->_has_permission(path) || this->_has_opened_file()) {
             return false;
         }
-        char* _path = realpath(path, NULL);
-        int flags = O_CREAT;
-        flags |= (type == T_READ) ? O_RDONLY : O_WRONLY;
+        char* _path = this->_realpath(path);
+        int flags = 0;
+        flags |= ((type == T_READ) ? O_RDONLY : O_WRONLY);
+        if (type == T_WRITE) flags |= O_CREAT;
 
-        int fd = open(_path, flags);
+        mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
+
+        int fd = open(_path, flags, mode);
         if (fd == -1) {
             free(_path);
             return false;
@@ -349,7 +388,8 @@ private:
         if (!this->_has_permission(path) || this->_has_opened_file()) {
             return false;
         }
-        char* _path = realpath(path, NULL);
+        char* _path = this->_realpath(path);
+        if (_path == NULL) return false;
         DIR* dirp;
         dirp = opendir(_path);
         if (dirp == NULL) {
