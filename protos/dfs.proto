@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+package dfs;
+
+service DFS {
+    // $ getdir
+    rpc get_dir(Void) returns (Str) {}
+
+    // $ cd directory_name
+    rpc change_dir(Str) returns (Bool) {}
+
+    // $ filecount
+    rpc file_count(Void) returns (Int) {}
+
+    // $ ls [-l] [directory_name]
+    rpc open_list(Str) returns (Bool) {}
+    rpc next_list(Void) returns (Dentry) {}
+    rpc close_list(Void) returns (Bool) {}
+
+    // $ put localfile [remotefile]
+    rpc open_file_to_write(Str) returns (Bool) {}
+    rpc next_write(WriteRequest) returns (Bool) {}
+
+    // $ get remotefile [localfile]
+    rpc open_file_to_read(Str) returns (Bool) {}
+    rpc next_read(Void) returns (ReadResponse) {}
+
+    // $ randomread remotefile firstbyte numbytes
+    rpc random_read(RandomReadRequest) returns (ReadResponse) {}
+
+    rpc close_file(Void) returns (Bool) {}
+}
+
+message Void {}
+
+message Str {
+    string content = 1;
+}
+
+message Bool {
+    bool value = 1;
+}
+
+message Int {
+    int32 value = 1;
+}
+
+message Dentry {
+    string name = 1;
+    bool is_directory = 2;
+    int32 size = 3;
+    int32 last_modified_time = 4;
+}
+
+message Block {
+    bytes content = 1;
+}
+
+message WriteRequest {
+    Block block = 1;
+    int32 size = 2;
+}
+
+message ReadResponse {
+    Block block = 1;
+    int32 size = 2;
+}
+
+message RandomReadRequest {
+    int32 offset = 1;
+    int32 size = 2;
+}
