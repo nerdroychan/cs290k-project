@@ -1,0 +1,37 @@
+=== Group Member ===
+
+Chen Chen (chenchen@shanghaitech.edu.cn)
+
+=== Files ===
+
+protos/dfs.proto: Definitions of gRPC interfaces
+Makefile:         The Makefile
+dfs_client.cpp:   Client code
+dfs_server.cpp:   Server code
+
+=== Usage ===
+
+Simply run `make` and the executable files are generated (dfs_server and
+dfs_client). The server listens to 0.0.0.0:50051.
+
+Every function is implemented except the filter (due to time limitation; I
+was on travel). You may use the programs as stated in the document.
+
+=== Notes ===
+
+Change CWD:
+    CWD is maintained on the server-side so `chdir` won't change the local
+CWD. The local CWD is always the birth place of the client process.
+
+Multi-user:
+    Multiple clients are supported but they share the same namespace
+(e.g. one client changing CWD will make the other users' CWD be changed).
+
+Path namespace:
+    When using local and remote paths, be careful about the namespace. The
+local path should follow the local CWD and the remote path should follow the
+remote CWD.
+
+Jail:
+    Users cannot change directory to the outside world of the initial CWD of
+the server process.
