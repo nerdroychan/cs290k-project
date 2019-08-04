@@ -129,9 +129,15 @@ public:
         for (std::vector<Dentry>::iterator it = files.begin();
                 it != files.end(); it++) {
             std::cout << it->name() << " ";
+            char buf[80];
+            time_t tt = it->last_modified_time();
+            struct tm  ts;
+            ts = *localtime(&tt);
+            strftime(buf, sizeof(buf), "%a %Y-%m-%d %H:%M:%S %Z", &ts);
+
             if (list) {
                 std::cout << it->is_directory() << " " << it->size() << " " \
-                    << it->last_modified_time() << " "; 
+                    << buf << " "; 
             }
             std::cout << std::endl;
         }
